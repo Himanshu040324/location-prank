@@ -142,9 +142,7 @@ export default function Home() {
               Your future is dark.
             </h1>
 
-            <p className="tiny">
-              😄 Prank! Your location was shared with the admin.
-            </p>
+  
           </div>
         )}
       </section>
